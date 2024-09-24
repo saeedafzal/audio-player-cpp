@@ -6,6 +6,7 @@
 #include <sstream>
 #include <filesystem>
 #include <vector>
+#include <algorithm>
 
 #include "raylib.h"
 #include "raygui.h"
@@ -19,7 +20,7 @@ void Player::start() {
     Music music = {};
 
     float duration = 0;
-    std::string formattedDuration = formatSeconds(duration);
+    std::string formattedDuration = "00:00";
     float timePlayed = 0;
 
     Rectangle sliderBounds = {100, 600 - 25 - 50, 600, 25};
@@ -28,6 +29,8 @@ void Player::start() {
     int currentIndex = -1;
     std::string listItems;
     std::vector<std::string> files;
+
+    std::string extensions[] = {".mp3", ".wav", ".ogg", ".flac", ".xm", ".mod"};
 
     bool playing = false;
     bool paused = false;
@@ -41,9 +44,21 @@ void Player::start() {
 
         if (listIndex >= 0 && currentIndex != listIndex) {
             currentIndex = listIndex;
+            UnloadMusicStream(music);
             music = LoadMusicStream(files[currentIndex].c_str());
             duration = GetMusicTimeLength(music);
+            formattedDuration = formatSeconds(duration);
             playing = true;
+            PlayMusicStream(music);
+        }
+
+        // Check if audio ended (playlist looping)
+        // HACK: 0.1 offset because it seems to never hit otherwise (possibly imprecise timing?)
+        if (currentIndex >= 0 && GetMusicTimePlayed(music) >= duration - 0.1) {
+            std::cout << "Audio track has ended." << std::endl;
+            playing = false;
+            listIndex = (listIndex + 1) % files.size();
+            StopMusicStream(music);
         }
 
         // Draw
@@ -100,6 +115,14 @@ void Player::start() {
                 for (const auto &entry : std::filesystem::directory_iterator(music)) {
                     std::filesystem::path path = entry.path();
                     std::string filename = path.filename();
+
+                    const char *ext = GetFileExtension(filename.c_str());
+                    std::cout << ext << std::endl;
+
+                    if (std::find(std::begin(extensions), std::end(extensions), ext) == std::end(extensions)) {
+                        continue;
+                    }
+
                     std::cout << filename << std::endl;
                     listItems += filename + ";";
                     files.push_back(entry.path());
